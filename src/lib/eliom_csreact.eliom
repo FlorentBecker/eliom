@@ -1,4 +1,24 @@
-(* Copyright Vincent Balat *)
+(* Ocsigen
+ * http://www.ocsigen.org
+ * Copyright (C) 2014
+ * Vincent Balat
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, with linking exception;
+ * either version 2.1 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *)
+
+
 {shared{
 open Eliom_lib
 module type RE = sig
@@ -175,6 +195,7 @@ module FakeReactiveData = struct
     val from_signal : 'a list FakeReact.S.t -> 'a t
     val value : 'a t -> 'a list
     val singleton_s : 'a FakeReact.S.t -> 'a t
+    val map : ('a -> 'b) -> 'a t -> 'b t
     module Lwt : sig
       val map_p : ('a -> 'b Lwt.t) -> 'a t -> 'b t Lwt.t
     end
@@ -185,6 +206,7 @@ module FakeReactiveData = struct
     let from_signal s = FakeReact.S.value s
     let singleton_s s = [s]
     let value l = l
+    let map f s = List.map f s
     module Lwt = struct
       let map_p = Lwt_list.map_p
     end
@@ -211,7 +233,7 @@ module SharedReact = struct
 
     let map ?eq (f : ('a -> 'b) shared_value) (s : 'a t) : 'b t =
       Eliom_lib.create_shared_value
-        (FakeReact.S.map (*VVV eq *) (Shared.local f) (Shared.local s))
+        (FakeReact.S.map (Shared.local f) (Shared.local s))
         {'b FakeReact.S.t{ React.S.map ?eq:%eq %f %s }}
 
     module Lwt = struct
@@ -257,9 +279,14 @@ module SharedReactiveData = struct
         FakeReactiveData.RList.singleton_s %s }} in
       (Eliom_lib.create_shared_value sv {'a FakeReactiveData.RList.t{ %cv }})
 
+    let map f s =
+      let sv = FakeReactiveData.RList.map (Shared.local f) (Shared.local s) in
+      let cv = {'a FakeReactiveData.RList.t{
+        FakeReactiveData.RList.map %f %s }} in
+      (Eliom_lib.create_shared_value sv {'a FakeReactiveData.RList.t{ %cv }})
+
     module Lwt = struct
-      let map_p (f : ('a -> 'b Lwt.t) shared_value) (l : 'a t)
-          : 'b t Lwt.t =
+      let map_p (f : ('a -> 'b Lwt.t) shared_value) (l : 'a t) : 'b t Lwt.t =
         lwt server_result =
           Lwt_list.map_p
             (Shared.local f)
